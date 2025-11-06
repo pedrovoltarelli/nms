@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useContext } from 'react';
+import React, { useState, useMemo, useContext, useEffect } from 'react';
 import { PlannedPost, PostType, ContentIdea } from '../types';
 import { Card } from '../components/common/Card';
 import { PageTitle } from '../components/common/PageTitle';
@@ -18,23 +18,43 @@ const PostModal: React.FC<{
   isOpen: boolean;
   onClose: () => void;
   date: Date;
-  onSave: (post: Omit<PlannedPost, 'id' | 'user_id'>) => void;
-}> = ({ isOpen, onClose, date, onSave }) => {
+  onSave: (post: Omit<PlannedPost, 'user_id'>) => void;
+  postToEdit?: PlannedPost | null;
+  prefilledIdeaId?: string;
+}> = ({ isOpen, onClose, date, onSave, postToEdit, prefilledIdeaId }) => {
   const context = useContext(AppContext);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [type, setType] = useState<PostType>(PostType.Post);
   const [linkedIdeaId, setLinkedIdeaId] = useState<string | undefined>();
   
+  useEffect(() => {
+    if (isOpen) {
+      if (postToEdit) {
+        setTitle(postToEdit.title);
+        setDescription(postToEdit.description);
+        setType(postToEdit.type);
+        setLinkedIdeaId(postToEdit.linkedIdeaId || '');
+      } else {
+        // Reset fields for new post
+        setTitle('');
+        setDescription('');
+        setType(PostType.Post);
+        setLinkedIdeaId(prefilledIdeaId || '');
+      }
+    }
+  }, [isOpen, postToEdit, prefilledIdeaId]);
+
   if (!isOpen) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSave({
+      id: postToEdit ? postToEdit.id : new Date().getTime().toString(), // Use existing id or generate a temporary one
       title,
       description,
       type,
-      linkedIdeaId,
+      linkedIdeaId: linkedIdeaId || undefined,
       date: date.toISOString().split('T')[0],
     });
     onClose();
@@ -44,7 +64,7 @@ const PostModal: React.FC<{
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <Card className="w-full max-w-lg">
         <form onSubmit={handleSubmit} className="p-6">
-          <h3 className="text-lg font-semibold mb-4">Novo Post para {date.toLocaleDateString()}</h3>
+          <h3 className="text-lg font-semibold mb-4">{postToEdit ? 'Editar Post' : 'Novo Post'} para {date.toLocaleDateString()}</h3>
           <div className="space-y-4">
             <Input id="post-title" label="Título" value={title} onChange={e => setTitle(e.target.value)} required />
             <Textarea id="post-description" label="Descrição" value={description} onChange={e => setDescription(e.target.value)} />
@@ -73,6 +93,8 @@ export const Planejamento: React.FC = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [isModalOpen, setModalOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [editingPost, setEditingPost] = useState<PlannedPost | null>(null);
+  const [prefilledIdeaId, setPrefilledIdeaId] = useState<string | undefined>();
 
   const month = currentDate.getMonth();
   const year = currentDate.getFullYear();
@@ -90,14 +112,50 @@ export const Planejamento: React.FC = () => {
     return days;
   }, [month, year, firstDay, daysInMonth]);
 
-  const handleDateClick = (date: Date) => {
+  const handleOpenAddModal = (date: Date) => {
+    // Check for content ideas created on this specific date
+    const dateString = date.toISOString().split('T')[0];
+    const ideasForDate = context?.contentIdeas
+      .filter(idea => idea.createdAt.startsWith(dateString))
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    if (ideasForDate && ideasForDate.length > 0) {
+      setPrefilledIdeaId(ideasForDate[0].id);
+    } else {
+      setPrefilledIdeaId(undefined);
+    }
+
+    setEditingPost(null);
     setSelectedDate(date);
     setModalOpen(true);
   };
+  
+  const handleOpenEditModal = (post: PlannedPost) => {
+    // The date string from the database is YYYY-MM-DD.
+    // New Date() can misinterpret this as UTC time, causing off-by-one day errors.
+    // Adding T00:00:00 ensures it's parsed in the local timezone.
+    const postDate = new Date(`${post.date}T00:00:00`);
 
-  const handleSavePost = (post: Omit<PlannedPost, 'id' | 'user_id'>) => {
-    if (context) {
-        context.addPlannedPost(post);
+    setSelectedDate(postDate);
+    setEditingPost(post);
+    setPrefilledIdeaId(undefined); // Not needed for editing
+    setModalOpen(true);
+  };
+  
+  const handleCloseModal = () => {
+    setModalOpen(false);
+    setSelectedDate(null);
+    setEditingPost(null);
+  };
+
+  const handleSavePost = (postData: Omit<PlannedPost, 'user_id'>) => {
+    if (!context) return;
+    
+    if (editingPost) {
+      context.updatePlannedPost({ ...postData, user_id: context.user.id });
+    } else {
+      const { id, ...newPostData } = postData; // Remove temporary ID before inserting
+      context.addPlannedPost(newPostData);
     }
   };
 
@@ -127,25 +185,55 @@ export const Planejamento: React.FC = () => {
           </div>
           <div className="grid grid-cols-7 gap-1">
             {weekdays.map(day => <div key={day} className="text-center font-medium text-sm text-light-text-secondary dark:text-dark-text-secondary p-2">{day}</div>)}
-            {calendarDays.map((day, index) => (
-              <div key={index} className="border border-light-border dark:border-dark-border h-32 p-2 flex flex-col relative group cursor-pointer" onClick={() => day && handleDateClick(day)}>
-                {day ? (
-                  <>
-                    <span className="font-medium text-sm">{day.getDate()}</span>
-                    <div className="mt-1 space-y-1 overflow-y-auto">
-                        {postsByDate[day.toISOString().split('T')[0]]?.map(post => (
-                           <div key={post.id} className={`${postTypeColors[post.type]} text-white text-xs p-1 rounded truncate`} title={post.title}>{post.title}</div>
-                        ))}
-                    </div>
-                    <button className="absolute bottom-2 right-2 w-6 h-6 bg-primary text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">+</button>
-                  </>
-                ) : <div />}
-              </div>
-            ))}
+            {calendarDays.map((day, index) => {
+              const dayPosts = day ? (postsByDate[day.toISOString().split('T')[0]] || []) : [];
+              return (
+                <div key={index} className="border border-light-border dark:border-dark-border h-36 p-2 flex flex-col relative group hover:bg-light-bg-secondary/20 dark:hover:bg-dark-bg-secondary/20 transition-colors">
+                  {day ? (
+                    <>
+                      <span className="font-medium text-sm">{day.getDate()}</span>
+                      <div className="mt-1 space-y-1 overflow-y-auto custom-scrollbar flex-grow">
+                          {dayPosts.map(post => (
+                             <div key={post.id} onClick={() => handleOpenEditModal(post)} className={`${postTypeColors[post.type]} text-white text-xs p-1 rounded truncate cursor-pointer hover:opacity-80`} title={post.title}>{post.title}</div>
+                          ))}
+                      </div>
+                      <button 
+                        onClick={() => handleOpenAddModal(day)} 
+                        className="absolute bottom-2 right-2 w-6 h-6 bg-primary text-white rounded-full flex items-center justify-center text-sm font-bold transition-all duration-200 transform hover:scale-110 active:scale-95"
+                      >
+                        {dayPosts.length > 0 ? `${dayPosts.length}` : '+'}
+                      </button>
+                    </>
+                  ) : <div />}
+                </div>
+              );
+            })}
           </div>
         </div>
       </Card>
-      {selectedDate && <PostModal isOpen={isModalOpen} onClose={() => setModalOpen(false)} date={selectedDate} onSave={handleSavePost} />}
+      {selectedDate && <PostModal isOpen={isModalOpen} onClose={handleCloseModal} date={selectedDate} onSave={handleSavePost} postToEdit={editingPost} prefilledIdeaId={prefilledIdeaId} />}
     </div>
   );
 };
+
+// Add custom scrollbar styles to index.html for better visibility
+/*
+In index.html, add these styles:
+
+<style>
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: #171717; // dark-bg-secondary
+    border-radius: 10px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #5B21B6; // A darker shade of primary
+    border-radius: 10px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #7C3AED; // primary
+  }
+</style>
+*/

@@ -6,6 +6,8 @@ import { supabase } from '../services/supabase';
 
 type AuthMode = 'login' | 'signup';
 
+const CheckIcon: React.FC<{className?: string}> = ({className}) => (<svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>);
+
 export const AuthPage: React.FC = () => {
   const [mode, setMode] = useState<AuthMode>('login');
   const [email, setEmail] = useState('');
@@ -15,11 +17,16 @@ export const AuthPage: React.FC = () => {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [signupSuccess, setSignupSuccess] = useState(false);
+  const [isResendingEmail, setIsResendingEmail] = useState(false); // New state for resending email
+  const [resendFeedback, setResendFeedback] = useState<{message: string, type: string} | null>(null); // Feedback for resend action
+
 
   const handleAuthAction = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError('');
+    setSignupSuccess(false); // Reset signup success on new attempt
+    setResendFeedback(null); // Clear resend feedback
 
     if (mode === 'signup') {
       if (password !== confirmPassword) {
@@ -32,7 +39,6 @@ export const AuthPage: React.FC = () => {
             email,
             password,
             options: {
-                emailRedirectTo: window.location.origin, // FIX: Ensures confirmation link uses the correct site URL
                 data: {
                     name: name
                 }
@@ -40,7 +46,7 @@ export const AuthPage: React.FC = () => {
         });
         if (signUpError) throw signUpError;
         
-        setSignupSuccess(true);
+        setSignupSuccess(true); // Set success state
 
       } catch (err: any) {
         if (err.message.includes('For security purposes')) {
@@ -64,7 +70,7 @@ export const AuthPage: React.FC = () => {
 
       } catch (err: any) {
         if (err.message.includes('Email not confirmed')) {
-            setError('Seu e-mail ainda não foi confirmado. Por favor, verifique sua caixa de entrada e clique no link de confirmação.');
+            setError('Seu e-mail ainda não foi confirmado. Por favor, verifique sua caixa de entrada (e a pasta de spam!) e clique no link de confirmação para fazer login.');
         } else if (err.message.includes('Invalid login credentials')) {
             setError('E-mail ou senha inválidos.');
         } else {
@@ -76,6 +82,29 @@ export const AuthPage: React.FC = () => {
     setIsLoading(false);
   };
   
+  const handleResendEmail = async () => {
+    setIsResendingEmail(true);
+    setResendFeedback(null);
+    try {
+        const { error: resendError } = await supabase.auth.resend({
+            type: 'signup',
+            email: email,
+        });
+        if (resendError) throw resendError;
+        setResendFeedback({ message: 'E-mail de verificação reenviado! Verifique sua caixa de entrada.', type: 'success' });
+    } catch (err: any) {
+        console.error("Resend email error:", err);
+        let msg = 'Ocorreu um erro ao reenviar o e-mail.';
+        if (err.message.includes('For security purposes')) {
+            msg = 'Você realizou muitas tentativas. Por favor, aguarde um minuto antes de tentar novamente.';
+        }
+        setResendFeedback({ message: msg, type: 'error' });
+    } finally {
+        setIsResendingEmail(false);
+        setTimeout(() => setResendFeedback(null), 5000); // Clear feedback after 5 seconds
+    }
+  };
+
   const toggleMode = () => {
     setMode(prev => prev === 'login' ? 'signup' : 'login');
     setError('');
@@ -83,27 +112,9 @@ export const AuthPage: React.FC = () => {
     setPassword('');
     setName('');
     setConfirmPassword('');
-    setSignupSuccess(false);
+    setSignupSuccess(false); // Reset signup success when toggling mode
+    setResendFeedback(null); // Clear resend feedback
   };
-
-  if (signupSuccess) {
-    return (
-        <div className="flex items-center justify-center min-h-screen p-4">
-            <Card className="w-full max-w-md">
-                <div className="p-8 text-center">
-                    <div className="w-16 h-16 bg-primary/10 text-primary mx-auto rounded-full flex items-center justify-center mb-4">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 19v-8.93a2 2 0 01.89-1.664l7-4.666a2 2 0 012.22 0l7 4.666A2 2 0 0121 10.07V19M3 19a2 2 0 002 2h14a2 2 0 002-2M3 19h18M9 11l3 3m0 0l3-3m-3 3V3" /></svg>
-                    </div>
-                    <h1 className="text-2xl font-bold mb-2 bg-gradient-primary bg-clip-text text-transparent">Verifique seu E-mail</h1>
-                    <p className="text-light-text-secondary dark:text-dark-text-secondary mb-6">
-                        Enviamos um link de confirmação para <strong>{email}</strong>. Por favor, clique no link para ativar sua conta.
-                    </p>
-                    <Button onClick={toggleMode} variant="secondary">Voltar para Login</Button>
-                </div>
-            </Card>
-        </div>
-    );
-  }
 
   return (
     <div className="flex items-center justify-center min-h-screen p-4">
@@ -116,60 +127,86 @@ export const AuthPage: React.FC = () => {
             {mode === 'login' ? 'Faça login para turbinar seu marketing.' : 'Comece a gerar conteúdo com IA.'}
           </p>
           {error && <p className="bg-red-500/10 text-red-500 text-sm text-center p-3 rounded-lg mb-4">{error}</p>}
-          <form onSubmit={handleAuthAction} className="space-y-6">
-            {mode === 'signup' && (
+          
+          {signupSuccess ? (
+            <div className="bg-green-500/10 text-green-400 text-sm font-medium p-4 rounded-lg mb-6 text-center">
+              <p className="font-semibold">Cadastro realizado com sucesso!</p>
+              <p className="mt-2">Por favor, verifique seu e-mail (<span className="font-bold">{email}</span>) para confirmar sua conta antes de fazer login. <br/>(Verifique também a pasta de spam/lixo eletrônico!)</p>
+              
+              {resendFeedback && (
+                <p className={`mt-4 text-sm font-medium ${resendFeedback.type === 'success' ? 'text-green-400' : 'text-red-400'}`}>
+                    {resendFeedback.message}
+                </p>
+              )}
+
+              <div className="flex flex-col gap-3 mt-4">
+                <Button variant="secondary" onClick={handleResendEmail} disabled={isResendingEmail}>
+                  {isResendingEmail ? 'Reenviando...' : (resendFeedback?.type === 'success' ? <><CheckIcon className="w-4 h-4"/> E-mail enviado!</> : 'Reenviar E-mail de Verificação')}
+                </Button>
+                <Button variant="primary" onClick={() => setMode('login')} className="mt-2">
+                  Fazer Login
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <form onSubmit={handleAuthAction} className="space-y-6">
+              {mode === 'signup' && (
+                <Input
+                  id="name"
+                  label="Seu Nome"
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Ex: Maria Silva"
+                  required
+                />
+              )}
               <Input
-                id="name"
-                label="Seu Nome"
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Ex: Maria Silva"
+                id="email"
+                label="Seu E-mail"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Ex: maria.silva@email.com"
                 required
+                autoComplete="email"
               />
-            )}
-            <Input
-              id="email"
-              label="Seu E-mail"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="Ex: maria.silva@email.com"
-              required
-              autoComplete="email"
-            />
-            <Input
-              id="password"
-              label="Sua Senha"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              required
-              autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-            />
-            {mode === 'signup' && (
               <Input
-                id="confirmPassword"
-                label="Confirme sua Senha"
+                id="password"
+                label="Sua Senha"
                 type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
                 required
-                autoComplete="new-password"
+                autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
               />
-            )}
-            <Button type="submit" fullWidth disabled={isLoading}>
-              {isLoading ? 'Processando...' : (mode === 'login' ? 'Entrar' : 'Criar Conta')}
-            </Button>
-          </form>
-          <p className="text-center text-sm mt-6">
-            {mode === 'login' ? 'Não tem uma conta?' : 'Já tem uma conta?'}
-            <button onClick={toggleMode} className="font-semibold text-primary hover:underline ml-2">
-              {mode === 'login' ? 'Cadastre-se' : 'Faça Login'}
-            </button>
-          </p>
+              {mode === 'signup' && (
+                <Input
+                  id="confirmPassword"
+                  label="Confirme sua Senha"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="••••••••"
+                  required
+                  autoComplete="new-password"
+                />
+              )}
+              <Button type="submit" fullWidth disabled={isLoading}>
+                {isLoading ? 'Processando...' : (mode === 'login' ? 'Entrar' : 'Criar Conta')}
+              </Button>
+            </form>
+          )}
+
+          {!signupSuccess && ( // Only show toggle if not on success screen
+            <p className="text-center text-sm mt-6">
+              {mode === 'login' ? 'Não tem uma conta?' : 'Já tem uma conta?'}
+              <button onClick={toggleMode} className="font-semibold text-primary hover:underline ml-2">
+                {mode === 'login' ? 'Cadastre-se' : 'Faça Login'}
+              </button>
+            </p>
+          )}
         </div>
       </Card>
     </div>

@@ -4,7 +4,6 @@ import { PageTitle } from '../components/common/PageTitle';
 import { Button } from '../components/common/Button';
 import { Input } from '../components/common/Input';
 import { AppContext } from './Dashboard';
-import { Theme } from '../types';
 import { supabase } from '../services/supabase';
 
 export const Configuracoes: React.FC = () => {
@@ -17,10 +16,6 @@ export const Configuracoes: React.FC = () => {
 
 
     if (!context) return null;
-
-    const handleThemeChange = (newTheme: Theme) => {
-        context.setTheme(newTheme);
-    };
     
     const handleSaveChanges = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -37,7 +32,7 @@ export const Configuracoes: React.FC = () => {
             if (name !== context.user.name) {
                 const { error: profileError } = await supabase
                     .from('profiles')
-                    .update({ name })
+                    .update({ full_name: name })
                     .eq('id', context.user.id);
                 if (profileError) throw profileError;
 
@@ -47,6 +42,10 @@ export const Configuracoes: React.FC = () => {
 
             // Update password if provided
             if (newPassword) {
+                if (newPassword.length < 6) {
+                    setFeedback({ message: 'A nova senha deve ter pelo menos 6 caracteres.', type: 'error' });
+                    return;
+                }
                 const { error: passwordError } = await supabase.auth.updateUser({ password: newPassword });
                 if (passwordError) throw passwordError;
             }
@@ -61,7 +60,20 @@ export const Configuracoes: React.FC = () => {
 
         } catch(error: any) {
             console.error("Error updating profile:", error);
-            setFeedback({ message: `Erro: ${error.message}`, type: 'error' });
+            let message = "Ocorreu um erro ao atualizar o perfil. Por favor, tente novamente.";
+            if (error && error.message) {
+                // More user-friendly messages for common Supabase errors
+                if (error.message.includes('password should be different')) {
+                    message = 'A nova senha deve ser diferente da senha anterior.';
+                } else if (error.message.includes('For security purposes, you need to re-authenticate')) {
+                    message = 'Por segurança, você precisa fazer login novamente para alterar sua senha.';
+                } else if (error.message.includes('check constraint')) { // RLS or other constraint error
+                    message = 'Não foi possível salvar as alterações. Verifique suas permissões.';
+                } else {
+                    message = error.message; // Use the original message for other errors
+                }
+            }
+            setFeedback({ message: `Erro: ${message}`, type: 'error' });
         }
 
     };
@@ -100,19 +112,6 @@ export const Configuracoes: React.FC = () => {
                 </form>
             </Card>
 
-            <Card>
-                <div className="p-6 space-y-4">
-                    <h3 className="text-lg font-semibold border-b border-light-border dark:border-dark-border pb-3">Preferências</h3>
-                    <div>
-                        <label className="block text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-2">Tema Padrão</label>
-                        <div className="flex items-center gap-4">
-                            <Button variant={context.theme === 'light' ? 'primary' : 'secondary'} onClick={() => handleThemeChange('light')}>Claro</Button>
-                            <Button variant={context.theme === 'dark' ? 'primary' : 'secondary'} onClick={() => handleThemeChange('dark')}>Escuro</Button>
-                        </div>
-                    </div>
-                </div>
-            </Card>
-            
             <Card>
                 <div className="p-6 space-y-4">
                     <h3 className="text-lg font-semibold border-b border-light-border dark:border-dark-border pb-3 text-red-500">Zona de Perigo</h3>

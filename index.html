@@ -4,41 +4,49 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>NMS - AI Marketing Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
     tailwind.config = {
       darkMode: 'class',
       theme: {
         extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+          },
           colors: {
             primary: {
               DEFAULT: '#7C3AED',
               light: '#A78BFA',
             },
             dark: {
-              bg: '#0F172A', // Slate 900
-              'bg-secondary': '#1E293B', // Slate 800
-              border: '#334155', // Slate 700
+              bg: '#000000', // Black
+              'bg-secondary': '#171717', // Neutral 900
+              border: '#262626', // Neutral 800
               text: '#F1F5F9', // Slate 100
               'text-secondary': '#94A3B8', // Slate 400
-            },
-            light: {
-              bg: '#F8FAFC', // Slate 50
-              'bg-secondary': '#FFFFFF',
-              border: '#E2E8F0', // Slate 200
-              text: '#0F172A', // Slate 900
-              'text-secondary': '#64748B', // Slate 500
             },
           },
           backgroundImage: {
             'gradient-primary': 'linear-gradient(to right, #7C3AED, #5B21B6)',
+          },
+          keyframes: {
+            'fade-in': {
+              '0%': { opacity: '0', transform: 'translateY(10px)' },
+              '100%': { opacity: '1', transform: 'translateY(0)' },
+            },
+          },
+          animation: {
+            'fade-in': 'fade-in 0.5s ease-out forwards',
           },
         },
       },
     }
     </script>
 </head>
-<body class="antialiased min-h-screen bg-light-bg dark:bg-dark-bg bg-gradient-to-br from-light-bg to-violet-100 dark:from-dark-bg dark:to-indigo-950/20">
+<body class="antialiased min-h-screen font-sans bg-dark-bg text-dark-text">
     <div id="root"></div>
 
     <script type="importmap">

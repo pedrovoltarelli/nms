@@ -27,9 +27,13 @@ Crie a copy solicitada. Use gatilhos mentais, quebras de linha para boa legibili
       contents: prompt,
     });
     return response.text;
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error generating copy with Gemini:", error);
-    return "Ocorreu um erro ao gerar a copy. Por favor, tente novamente.";
+    let errorMessage = "Ocorreu um erro ao gerar a copy. Por favor, tente novamente.";
+    if (error.message?.includes('API_KEY') || (error.response?.status === 401 || error.response?.status === 403)) {
+        errorMessage = 'Erro: Chave API Gemini inválida ou não configurada. Por favor, verifique suas configurações no ambiente.';
+    }
+    return errorMessage;
   }
 };
 
@@ -52,10 +56,50 @@ Retorne apenas a lista de ideias, sem introduções ou observações.`;
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: prompt,
+      config: {
+        thinkingConfig: { thinkingBudget: 0 }, // Priorize a velocidade para a geração de ideias
+        temperature: 0.7,
+        topP: 0.9,
+        topK: 40,
+      }
     });
     return response.text;
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error generating content ideas with Gemini:", error);
-    return "Ocorreu um erro ao gerar as ideias. Por favor, tente novamente.";
+    let errorMessage = "Ocorreu um erro ao gerar as ideias. Por favor, tente novamente.";
+    if (error.message?.includes('API_KEY') || (error.response?.status === 401 || error.response?.status === 403)) {
+        errorMessage = 'Erro: Chave API Gemini inválida ou não configurada. Por favor, verifique suas configurações no ambiente.';
+    }
+    return errorMessage;
+  }
+};
+
+export const generateIdeaExpansion = async (title: string, description: string): Promise<string> => {
+  const prompt = `A partir do seguinte título e descrição de ideia de conteúdo, elabore uma descrição mais detalhada da proposta, incluindo sugestões de narrativa, elementos visuais (se aplicável), e potencial mensagem/call to action. Expanda a ideia em um parágrafo conciso mas informativo.
+
+**Título da Ideia:** ${title}
+**Descrição Curta:** ${description}
+
+Descrição Detalhada:`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash', // Use a text-focused model for idea expansion
+      contents: prompt,
+      config: {
+          thinkingConfig: { thinkingBudget: 0 }, // Priorize a velocidade para a expansão de ideias
+          temperature: 0.7,
+          topP: 0.9,
+          topK: 40,
+      }
+    });
+    return response.text;
+  } catch (error: any) {
+    console.error("Error generating idea expansion with Gemini:", error);
+    let errorMessage = "Ocorreu um erro ao expandir a ideia. Por favor, tente novamente.";
+    if (error.message?.includes('API_KEY') || (error.response?.status === 401 || error.response?.status === 403)) {
+        errorMessage = 'Erro: Chave API Gemini inválida ou não configurada. Por favor, verifique suas configurações no ambiente.';
+    }
+    return errorMessage;
   }
 };

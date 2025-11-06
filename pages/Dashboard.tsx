@@ -8,14 +8,15 @@ import { Planejamento } from './Planejamento';
 import { Anuncios } from './Anuncios';
 import { Analises } from './Analises';
 import { Configuracoes } from './Configuracoes';
-import { User, Theme, GeneratedCopy, ContentIdea, PlannedPost } from '../types';
-import { useLocalStorage } from '../hooks/useLocalStorage';
+import { User, GeneratedCopy, ContentIdea, PlannedPost } from '../types';
 import { supabase } from '../services/supabase';
+import { AIChat } from './AIChat';
+import { IdeiasSalvas } from './IdeiasSalvas'; // Import IdeiasSalvas
+
+const PAGE_SIZE = 10;
 
 interface AppContextType {
   user: User;
-  theme: Theme;
-  setTheme: (theme: Theme) => void;
   logout: () => void;
   generatedCopies: GeneratedCopy[];
   contentIdeas: ContentIdea[];
@@ -23,8 +24,12 @@ interface AppContextType {
   addGeneratedCopy: (copy: Omit<GeneratedCopy, 'id' | 'createdAt' | 'user_id'>) => void;
   addContentIdea: (idea: Omit<ContentIdea, 'id' | 'createdAt' | 'user_id'>) => void;
   addPlannedPost: (post: Omit<PlannedPost, 'id' | 'user_id'>) => void;
+  updatePlannedPost: (post: PlannedPost) => void;
   onUpdateUser: (updatedUser: User) => void;
   setActivePage: (page: string) => void;
+  loadMoreActivities: () => Promise<void>;
+  isLoadingMore: boolean;
+  hasMoreActivities: boolean;
 }
 
 export const AppContext = createContext<AppContextType | null>(null);
@@ -43,6 +48,10 @@ const renderActivePage = (page: string): ReactNode => {
       return <GerarCopy />;
     case 'Ideias de Conteúdo':
       return <IdeiasConteudo />;
+    case 'Ideias Salvas': // New case for saved ideas page
+      return <IdeiasSalvas />;
+    case 'AI Chat':
+      return <AIChat />;
     case 'Planejamento':
       return <Planejamento />;
     case 'Anúncios':
@@ -59,31 +68,29 @@ const renderActivePage = (page: string): ReactNode => {
 export const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateUser, onLogout }) => {
   const [activePage, setActivePage] = useState('Área Principal');
   const [isSidebarOpen, setSidebarOpen] = useState(false);
-  const [theme, setTheme] = useLocalStorage<Theme>('nms-theme', 'dark');
 
   const [generatedCopies, setGeneratedCopies] = useState<GeneratedCopy[]>([]);
   const [contentIdeas, setContentIdeas] = useState<ContentIdea[]>([]);
   const [plannedPosts, setPlannedPosts] = useState<PlannedPost[]>([]);
-  
-  useEffect(() => {
-    if (theme === 'dark') {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-  }, [theme]);
+
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasMoreCopies, setHasMoreCopies] = useState(true);
+  const [hasMoreIdeas, setHasMoreIdeas] = useState(true);
 
   // Effect to fetch initial data and listen for real-time changes from Supabase
   useEffect(() => {
     if (!user.id) return;
 
     const fetchData = async () => {
-        const { data: copies } = await supabase.from('generatedCopies').select('*').eq('user_id', user.id).order('createdAt', { ascending: false });
+        const { data: copies } = await supabase.from('generatedCopies').select('*').eq('user_id', user.id).order('createdAt', { ascending: false }).range(0, PAGE_SIZE - 1);
         setGeneratedCopies(copies || []);
+        if (!copies || copies.length < PAGE_SIZE) setHasMoreCopies(false);
 
-        const { data: ideas } = await supabase.from('contentIdeas').select('*').eq('user_id', user.id).order('createdAt', { ascending: false });
+
+        const { data: ideas } = await supabase.from('contentIdeas').select('*').eq('user_id', user.id).order('createdAt', { ascending: false }).range(0, PAGE_SIZE - 1);
         setContentIdeas(ideas || []);
-        
+        if (!ideas || ideas.length < PAGE_SIZE) setHasMoreIdeas(false);
+
         const { data: posts } = await supabase.from('plannedPosts').select('*').eq('user_id', user.id).order('date', { ascending: false });
         setPlannedPosts(posts || []);
     };
@@ -101,8 +108,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateUser, onLogo
       ).subscribe();
 
     const postsSubscription = supabase.channel('plannedPosts')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'plannedPosts', filter: `user_id=eq.${user.id}` }, 
-        payload => setPlannedPosts(current => [payload.new as PlannedPost, ...current])
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'plannedPosts', filter: `user_id=eq.${user.id}` }, 
+        payload => {
+            if (payload.eventType === 'INSERT') {
+                 setPlannedPosts(current => [payload.new as PlannedPost, ...current].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+            } else if (payload.eventType === 'UPDATE') {
+                 setPlannedPosts(current => current.map(p => p.id === payload.new.id ? payload.new as PlannedPost : p));
+            }
+        }
       ).subscribe();
 
     return () => {
@@ -111,6 +124,33 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateUser, onLogo
       supabase.removeChannel(postsSubscription);
     };
   }, [user.id]);
+
+  const loadMoreActivities = async () => {
+    if (isLoadingMore) return;
+    setIsLoadingMore(true);
+
+    if (hasMoreCopies) {
+        const { data: moreCopies } = await supabase.from('generatedCopies').select('*').eq('user_id', user.id).order('createdAt', { ascending: false }).range(generatedCopies.length, generatedCopies.length + PAGE_SIZE - 1);
+        if (moreCopies && moreCopies.length > 0) {
+            setGeneratedCopies(current => [...current, ...moreCopies]);
+        }
+        if (!moreCopies || moreCopies.length < PAGE_SIZE) {
+            setHasMoreCopies(false);
+        }
+    }
+    
+    if (hasMoreIdeas) {
+        const { data: moreIdeas } = await supabase.from('contentIdeas').select('*').eq('user_id', user.id).order('createdAt', { ascending: false }).range(contentIdeas.length, contentIdeas.length + PAGE_SIZE - 1);
+        if (moreIdeas && moreIdeas.length > 0) {
+            setContentIdeas(current => [...current, ...moreIdeas]);
+        }
+        if (!moreIdeas || moreIdeas.length < PAGE_SIZE) {
+            setHasMoreIdeas(false);
+        }
+    }
+
+    setIsLoadingMore(false);
+  };
   
   const addGeneratedCopy = async (copy: Omit<GeneratedCopy, 'id' | 'createdAt' | 'user_id'>) => {
     const newCopy = {
@@ -137,6 +177,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateUser, onLogo
     };
     await supabase.from('plannedPosts').insert(newPost);
   };
+
+  const updatePlannedPost = async (post: PlannedPost) => {
+    await supabase.from('plannedPosts').update(post).eq('id', post.id);
+  };
   
   const handleUpdateUser = (updatedUser: User) => {
     onUpdateUser(updatedUser);
@@ -144,8 +188,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateUser, onLogo
 
   const contextValue: AppContextType = {
     user,
-    theme,
-    setTheme,
     logout: onLogout,
     generatedCopies,
     contentIdeas,
@@ -153,13 +195,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateUser, onLogo
     addGeneratedCopy,
     addContentIdea,
     addPlannedPost,
+    updatePlannedPost,
     onUpdateUser: handleUpdateUser,
-    setActivePage
+    setActivePage,
+    loadMoreActivities,
+    isLoadingMore,
+    hasMoreActivities: hasMoreCopies || hasMoreIdeas,
   };
 
   return (
     <AppContext.Provider value={contextValue}>
-      <div className={`flex h-screen bg-light-bg dark:bg-dark-bg transition-colors duration-300`}>
+      <div className={`flex h-screen bg-dark-bg`}>
         <Sidebar 
           activePage={activePage} 
           setActivePage={setActivePage}
@@ -170,7 +216,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onUpdateUser, onLogo
         <div className="flex-1 flex flex-col overflow-hidden">
           <Header user={user} setSidebarOpen={setSidebarOpen} />
           <main className="flex-1 overflow-x-hidden overflow-y-auto p-6 lg:p-8">
-            {renderActivePage(activePage)}
+            <div key={activePage} className="animate-fade-in">
+              {renderActivePage(activePage)}
+            </div>
           </main>
         </div>
       </div>

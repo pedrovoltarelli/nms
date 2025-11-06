@@ -49,7 +49,7 @@ const App: React.FC = () => {
           setUser({
             id: supabaseUser.id,
             email: supabaseUser.email || '',
-            name: profile.name || 'Usuário',
+            name: profile.full_name || 'Usuário',
           });
         } else {
           // Profile doesn't exist, create it. This happens on first sign-up.
@@ -57,7 +57,7 @@ const App: React.FC = () => {
           const newName = supabaseUser.user_metadata?.name || 'Novo Usuário';
           const { data: newProfile, error: insertError } = await supabase
             .from('profiles')
-            .insert({ id: supabaseUser.id, name: newName })
+            .insert({ id: supabaseUser.id, full_name: newName })
             .select()
             .single();
 
@@ -66,7 +66,7 @@ const App: React.FC = () => {
           setUser({
             id: supabaseUser.id,
             email: supabaseUser.email || '',
-            name: newProfile.name || 'Usuário',
+            name: newProfile.full_name || 'Usuário',
           });
         }
       } catch (error) {

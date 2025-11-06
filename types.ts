@@ -4,8 +4,6 @@ export interface User {
   email: string;
 }
 
-export type Theme = 'light' | 'dark';
-
 export enum ToneOfVoice {
   Profissional = 'Profissional',
   Divertido = 'Divertido',

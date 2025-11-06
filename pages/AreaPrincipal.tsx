@@ -8,6 +8,7 @@ const PencilAltIcon: React.FC<{className?: string}> = ({className}) => (<svg xml
 const LightBulbIcon: React.FC<{className?: string}> = ({className}) => (<svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>);
 const CalendarIcon: React.FC<{className?: string}> = ({className}) => (<svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>);
 
+
 const StatCard: React.FC<{ title: string; value: number; icon: React.ElementType }> = ({ title, value, icon: Icon }) => {
   return (
     <Card className="p-6 bg-gradient-to-br from-light-bg-secondary to-light-bg dark:from-dark-bg-secondary dark:to-dark-bg">
@@ -24,10 +25,31 @@ const StatCard: React.FC<{ title: string; value: number; icon: React.ElementType
   );
 };
 
+// Type guard to check if an item is a GeneratedCopy
+function isGeneratedCopy(item: GeneratedCopy | ContentIdea): item is GeneratedCopy {
+    return 'prompt' in item && typeof item.prompt === 'object' && 'productName' in item.prompt;
+}
+
+// Type guard to check if an item is a ContentIdea
+function isContentIdea(item: GeneratedCopy | ContentIdea): item is ContentIdea {
+    return 'title' in item && 'description' in item && 'category' in item;
+}
+
 const RecentActivityItem: React.FC<{ item: GeneratedCopy | ContentIdea }> = ({ item }) => {
-    const isCopy = 'prompt' in item;
-    const title = isCopy ? item.prompt.productName : item.title;
-    const type = isCopy ? 'Copy Gerada' : 'Ideia Salva';
+    let title: string;
+    let type: string;
+    
+    if (isGeneratedCopy(item)) {
+        title = item.prompt.productName;
+        type = 'Copy Gerada';
+    } else if (isContentIdea(item)) {
+        title = item.title;
+        type = 'Ideia Salva';
+    } else {
+        // Fallback for unexpected types, though type guards should prevent this
+        title = 'Atividade Desconhecida';
+        type = 'Desconhecido';
+    }
     
     return (
         <div className="flex items-center justify-between py-3">
@@ -42,10 +64,9 @@ const RecentActivityItem: React.FC<{ item: GeneratedCopy | ContentIdea }> = ({ i
     );
 }
 
-// FIX: Replaced non-functional anchor tags with interactive buttons for quick navigation.
 const QuickAccessCard: React.FC = () => {
     const context = useContext(AppContext);
-
+    
     const navigateTo = (page: string) => {
         context?.setActivePage(page);
     };
@@ -55,15 +76,15 @@ const QuickAccessCard: React.FC = () => {
             <div className="p-6">
                 <h3 className="text-lg font-semibold mb-4">Acesso Rápido</h3>
                 <div className="space-y-4">
-                    <button onClick={() => navigateTo('Gerar Copy')} className="w-full text-left block p-4 bg-light-bg dark:bg-dark-bg hover:bg-light-border dark:hover:bg-dark-border rounded-lg transition-colors">
+                    <button onClick={() => navigateTo('Gerar Copy')} className="w-full text-left block p-4 bg-light-bg dark:bg-dark-bg hover:bg-light-border dark:hover:bg-dark-border rounded-lg transition-all duration-300 transform hover:-translate-y-0.5">
                         <h4 className="font-semibold">Gerar Nova Copy</h4>
                         <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary mt-1">Crie textos de marketing com IA.</p>
                     </button>
-                    <button onClick={() => navigateTo('Ideias de Conteúdo')} className="w-full text-left block p-4 bg-light-bg dark:bg-dark-bg hover:bg-light-border dark:hover:bg-dark-border rounded-lg transition-colors">
+                    <button onClick={() => navigateTo('Ideias de Conteúdo')} className="w-full text-left block p-4 bg-light-bg dark:bg-dark-bg hover:bg-light-border dark:hover:bg-dark-border rounded-lg transition-all duration-300 transform hover:-translate-y-0.5">
                         <h4 className="font-semibold">Buscar Ideias</h4>
                         <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary mt-1">Receba sugestões de conteúdo.</p>
                     </button>
-                    <button onClick={() => navigateTo('Planejamento')} className="w-full text-left block p-4 bg-light-bg dark:bg-dark-bg hover:bg-light-border dark:hover:bg-dark-border rounded-lg transition-colors">
+                    <button onClick={() => navigateTo('Planejamento')} className="w-full text-left block p-4 bg-light-bg dark:bg-dark-bg hover:bg-light-border dark:hover:bg-dark-border rounded-lg transition-all duration-300 transform hover:-translate-y-0.5">
                         <h4 className="font-semibold">Planejar Conteúdo</h4>
                         <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary mt-1">Organize suas publicações.</p>
                     </button>
@@ -72,6 +93,7 @@ const QuickAccessCard: React.FC = () => {
         </Card>
     );
 }
+
 
 export const AreaPrincipal: React.FC = () => {
     const context = useContext(AppContext);

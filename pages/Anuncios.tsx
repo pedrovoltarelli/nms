@@ -59,10 +59,10 @@ const SuccessMessage: React.FC = () => (
 );
 
 const roiData = [
-    { name: 'Semana 1', ROI: 210 },
-    { name: 'Semana 2', ROI: 280 },
-    { name: 'Semana 3', ROI: 250 },
-    { name: 'Semana 4', ROI: 340 },
+    { name: 'Semana 1', ROI: 150 },
+    { name: 'Semana 2', ROI: 220 },
+    { name: 'Semana 3', ROI: 180 },
+    { name: 'Semana 4', ROI: 250 },
 ];
 
 const RoiChart: React.FC = () => {
@@ -71,21 +71,24 @@ const RoiChart: React.FC = () => {
             <BarChart data={roiData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
                 <defs>
                     <linearGradient id="colorRoi" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#7C3AED" stopOpacity={0.8}/>
-                        <stop offset="95%" stopColor="#A78BFA" stopOpacity={0.5}/>
+                        <stop offset="5%" stopColor="#7C3AED" stopOpacity={0.9}/>
+                        <stop offset="95%" stopColor="#A78BFA" stopOpacity={0.6}/>
                     </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.1)" />
                 <XAxis dataKey="name" tick={{ fill: '#94A3B8' }} stroke="#334155" />
                 <YAxis tickFormatter={(value) => `${value}%`} tick={{ fill: '#94A3B8' }} stroke="#334155" />
                 <Tooltip
+                    formatter={(value: number) => [`${value}%`, 'ROI']}
+                    labelFormatter={(label: string) => `Desempenho: ${label}`}
                     contentStyle={{
                         backgroundColor: '#1E293B',
                         borderColor: '#334155',
                         borderRadius: '0.5rem',
                     }}
                     labelStyle={{ color: '#F1F5F9' }}
-                    itemStyle={{ color: '#A78BFA' }}
+                    itemStyle={{ color: '#A78BFA', fontWeight: 'bold' }}
+                    cursor={{ fill: 'rgba(167, 139, 250, 0.1)' }}
                 />
                 <Bar dataKey="ROI" fill="url(#colorRoi)" radius={[4, 4, 0, 0]} />
             </BarChart>
@@ -123,15 +126,15 @@ export const Anuncios: React.FC = () => {
                 {showSuccess && <SuccessMessage />}
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <MetricCard title="Custo Total" value="R$ 1.234" icon={DollarSignIcon} />
-                    <MetricCard title="Receita Gerada" value="R$ 5.432" icon={CashIcon} />
-                    <MetricCard title="ROI" value="340%" icon={TrendingUpIcon} />
+                    <MetricCard title="Custo Total" value="R$ 500,00" icon={DollarSignIcon} />
+                    <MetricCard title="Receita Gerada" value="R$ 1.300,00" icon={CashIcon} />
+                    <MetricCard title="ROI" value="160%" icon={TrendingUpIcon} />
                 </div>
                 
                 <Card>
                    <div className="p-6">
                        <h3 className="text-xl font-semibold mb-2">Retorno Sobre Investimento (ROI) Semanal</h3>
-                       <p className="text-light-text-secondary dark:text-dark-text-secondary mb-6">Desempenho das últimas 4 semanas.</p>
+                       <p className="text-light-text-secondary dark:text-dark-text-secondary mb-6">Visão geral do retorno de suas campanhas nas últimas 4 semanas.</p>
                        <RoiChart />
                    </div>
                 </Card>
